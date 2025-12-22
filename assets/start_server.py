@@ -102,16 +102,17 @@ class ConfigManager:
         app_dir = Path(__file__).parent.resolve()
         self.config_file = app_dir / config_file
 
-    def load_server_configs(self):
+    def load_config(self):
         if self.config_file.exists():
             try:
-                return json.loads(self.config_file.read_text()).get("servers", [])
+                return json.loads(self.config_file.read_text())
             except Exception as e:
                 print("Config load error:", e)
-        return []
+        return {"servers": [], "last_server": None}
 
-    def save_server_configs(self, servers_data):
-        self.config_file.write_text(json.dumps({"servers": servers_data}, indent=4))
+    def save_config(self, servers_data, last_server=None):
+        data = {"servers": servers_data, "last_server": last_server}
+        self.config_file.write_text(json.dumps(data, indent=4))
 
 # ---------- GUI ----------
 class WebServerGUI:
@@ -121,13 +122,20 @@ class WebServerGUI:
         self.root.geometry("1050x750")
         self.servers = {}
         self.current_server_name = None
+        self.last_server = None
         self.config_manager = ConfigManager()
         self.load_servers_from_config()
         self.build_gui()
+        # Restore last selected server
         if self.servers:
-            first = list(self.servers.keys())[0]
-            self.server_listbox.selection_set(0)
-            self.select_server(first)
+            if self.last_server and self.last_server in self.servers:
+                idx = list(self.servers.keys()).index(self.last_server)
+                self.server_listbox.selection_set(idx)
+                self.select_server(self.last_server)
+            else:
+                first = list(self.servers.keys())[0]
+                self.server_listbox.selection_set(0)
+                self.select_server(first)
 
     # ---------- GUI Construction ----------
     def build_gui(self):
@@ -364,27 +372,40 @@ class WebServerGUI:
                 raise ValueError("Port out of range")
             ip_mode = self.ip_mode_var.get()
             srv.use_https = self.https_var.get()
-            srv.ip_mode = {"Network Access (All IPs)": "network", "Local Access Only (127.0.0.1)": "localhost"}.get(ip_mode, "custom")
+            srv.ip_mode = {"Network Access (All IPs)": "network",
+                           "Local Access Only (127.0.0.1)": "localhost"}.get(ip_mode, "custom")
             if srv.ip_mode == "custom":
                 srv.custom_ip = self.custom_ip_entry.get().strip()
             srv.port = port
             ip_bind = srv.get_effective_ip()
             handler = SecureHTTPRequestHandler
+
+            # Change working directory to serve files
             os.chdir(srv.www_folder)
+
+            # Create server
             srv.server = socketserver.ThreadingTCPServer((ip_bind, port), handler)
+
+            # HTTPS setup with secure TLS
             if srv.use_https:
                 if not srv.cert_file or not srv.key_file:
                     messagebox.showerror("SSL Error", "Cert or key file missing")
                     return
                 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                context.minimum_version = ssl.TLSVersion.TLSv1_2  # enforce secure TLS
                 context.load_cert_chain(certfile=srv.cert_file, keyfile=srv.key_file)
                 srv.server.socket = context.wrap_socket(srv.server.socket, server_side=True)
+
+            # Start server thread
             srv.is_running = True
             srv.server_thread = threading.Thread(target=srv.server.serve_forever, daemon=True)
             srv.server_thread.start()
+
+            # Update GUI
             self.update_status()
             self.update_access_urls()
             self.log_message(f"Server '{srv.name}' started on {srv.get_display_ip()}")
+
         except Exception as e:
             messagebox.showerror("Error", str(e))
             self.log_message(f"Failed to start server: {e}")
@@ -463,6 +484,7 @@ class WebServerGUI:
 
     def select_server(self, name):
         self.current_server_name = name
+        self.last_server = name
         srv = self.servers[name]
         self.name_label.config(text=name)
         self.port_var.set(str(srv.port))
@@ -480,6 +502,7 @@ class WebServerGUI:
         self.update_status()
         self.update_access_urls()
         self.refresh_file_list()
+        self.save_servers_to_config()
 
     # ---------- WWW / files ----------
     def select_www_folder(self):
@@ -550,7 +573,8 @@ class WebServerGUI:
     # ---------- Config ----------
     def load_servers_from_config(self):
         self.servers.clear()
-        for data in self.config_manager.load_server_configs():
+        cfg = self.config_manager.load_config()
+        for data in cfg.get("servers", []):
             srv = ServerInstance(
                 data['name'],
                 data.get('port', 8080),
@@ -562,6 +586,7 @@ class WebServerGUI:
                 data.get('key_file')
             )
             self.servers[srv.name] = srv
+        self.last_server = cfg.get("last_server")
 
     def save_servers_to_config(self):
         data = []
@@ -576,12 +601,17 @@ class WebServerGUI:
                 'cert_file': srv.cert_file,
                 'key_file': srv.key_file
             })
-        self.config_manager.save_server_configs(data)
+        self.config_manager.save_config(data, self.current_server_name)
+
+    def on_closing(self):
+        self.save_servers_to_config()
+        self.root.destroy()
 
 # ---------- Run ----------
 def main():
     root = tk.Tk()
-    WebServerGUI(root)
+    gui = WebServerGUI(root)
+    root.protocol("WM_DELETE_WINDOW", gui.on_closing)
     root.mainloop()
 
 if __name__ == "__main__":
