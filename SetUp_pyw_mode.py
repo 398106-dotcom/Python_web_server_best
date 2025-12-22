@@ -1,5 +1,6 @@
-# SetUp_3_pyw_smart_installer_ignore_config.py
+# SetUp_3_pyw_smart_installer_wildcard_ignore.py
 import pathlib, urllib.request, json, subprocess, sys, os, hashlib
+import fnmatch
 
 # -----------------------
 GITHUB_USER = "398106-dotcom"
@@ -34,9 +35,9 @@ def download_file_smart(url, dest: pathlib.Path, expected_sha=None):
     print(f"✅ {dest} downloaded/updated")
     return True
 
-def download_github_folder(api_url, target_folder: pathlib.Path, ignore_files=None):
-    """Recursively download all files, optionally ignoring some filenames."""
-    ignore_files = ignore_files or []
+def download_github_folder(api_url, target_folder: pathlib.Path, ignore_patterns=None):
+    """Recursively download all files, skipping those that match ignore_patterns."""
+    ignore_patterns = ignore_patterns or []
     try:
         with urllib.request.urlopen(api_url) as r:
             files = json.load(r)
@@ -45,22 +46,24 @@ def download_github_folder(api_url, target_folder: pathlib.Path, ignore_files=No
         sys.exit(1)
 
     for f in files:
+        rel_path = pathlib.Path(f["path"]).relative_to(GITHUB_FOLDER)
+        # skip if any pattern matches
+        if any(fnmatch.fnmatch(str(rel_path), pattern) for pattern in ignore_patterns):
+            print(f"⏭️ Skipping {rel_path} (ignored)")
+            continue
+
         if f["type"] == "file":
-            rel_path = pathlib.Path(f["path"]).relative_to(GITHUB_FOLDER)
-            if rel_path.name in ignore_files:
-                print(f"⏭️ Skipping {rel_path} (ignored)")
-                continue
             dest = target_folder / rel_path
             download_file_smart(f["download_url"], dest, expected_sha=f.get("sha"))
         elif f["type"] == "dir":
-            download_github_folder(f["url"], target_folder, ignore_files=ignore_files)
+            download_github_folder(f["url"], target_folder, ignore_patterns=ignore_patterns)
         else:
             print(f"⚠️ Unknown type {f['type']} for {f['path']} — skipping")
 
 def create_smart_updater(folder: pathlib.Path):
     updater_path = folder / "update.py"
     updater_code = f"""\
-import pathlib, urllib.request, json, hashlib, sys, os
+import pathlib, urllib.request, json, hashlib, sys, os, fnmatch
 
 GITHUB_USER = "{GITHUB_USER}"
 GITHUB_REPO = "{GITHUB_REPO}"
@@ -68,7 +71,8 @@ GITHUB_FOLDER = "{GITHUB_FOLDER}"
 GITHUB_BRANCH = "{GITHUB_BRANCH}"
 API_URL = f"https://api.github.com/repos/{{GITHUB_USER}}/{{GITHUB_REPO}}/contents/{{GITHUB_FOLDER}}?ref={{GITHUB_BRANCH}}"
 
-IGNORE_FILES = ["server_config.json"]
+# ✅ User can customize this list with filenames, wildcards, or folder patterns
+IGNORE_PATTERNS = ["server_config.json", ".gitkeep", "docs/*", "*.md"]
 
 def sha1_bytes(data: bytes):
     h = hashlib.sha1()
@@ -94,8 +98,8 @@ def download_file_smart(url, dest: pathlib.Path, expected_sha=None):
     print(f"✅ {{dest}} downloaded/updated")
     return True
 
-def download_github_folder(api_url, target_folder: pathlib.Path, ignore_files=None):
-    ignore_files = ignore_files or []
+def download_github_folder(api_url, target_folder: pathlib.Path, ignore_patterns=None):
+    ignore_patterns = ignore_patterns or []
     try:
         with urllib.request.urlopen(api_url) as r:
             files = json.load(r)
@@ -104,15 +108,16 @@ def download_github_folder(api_url, target_folder: pathlib.Path, ignore_files=No
         sys.exit(1)
 
     for f in files:
+        rel_path = pathlib.Path(f["path"]).relative_to(GITHUB_FOLDER)
+        if any(fnmatch.fnmatch(str(rel_path), pattern) for pattern in ignore_patterns):
+            print(f"⏭️ Skipping {{rel_path}} (ignored)")
+            continue
+
         if f["type"] == "file":
-            rel_path = pathlib.Path(f["path"]).relative_to(GITHUB_FOLDER)
-            if rel_path.name in ignore_files:
-                print(f"⏭️ Skipping {{rel_path}} (ignored)")
-                continue
             dest = target_folder / rel_path
             download_file_smart(f["download_url"], dest, expected_sha=f.get("sha"))
         elif f["type"] == "dir":
-            download_github_folder(f["url"], target_folder, ignore_files=ignore_files)
+            download_github_folder(f["url"], target_folder, ignore_patterns=ignore_patterns)
         else:
             print(f"⚠️ Unknown type {{f['type']}} for {{f['path']}} — skipping")
 
@@ -120,8 +125,12 @@ def main():
     print("=== Smart Updater for pyw_mode ===\\n")
     folder = pathlib.Path(__file__).parent.resolve()
     print(f"📂 Target folder: {{folder}}\\n")
-    download_github_folder(API_URL, folder, ignore_files=IGNORE_FILES)
-    print("\\n✅ Update complete! All files in pyw_mode are now up-to-date (config preserved).")
+    download_github_folder(API_URL, folder, ignore_patterns=IGNORE_PATTERNS)
+
+    # ensure www folder exists
+    www_folder = folder / "www"
+    www_folder.mkdir(exist_ok=True)
+    print("\\n✅ Update complete! All files in pyw_mode are now up-to-date (ignored files preserved).")
 
 if __name__ == "__main__":
     main()
@@ -131,7 +140,7 @@ if __name__ == "__main__":
 
 # -----------------------
 def main():
-    print("=== Python Web Server Smart Installer ===\n")
+    print("=== Python Web Server Smart Installer ===\\n")
 
     target = input("Install location (full path): ").strip()
     if not target:
@@ -141,8 +150,12 @@ def main():
     folder = pathlib.Path(target).expanduser().resolve()
     folder.mkdir(parents=True, exist_ok=True)
 
-    # ---- download all files in pyw_mode, ignore config ----
-    download_github_folder(API_URL, folder, ignore_files=["server_config.json"])
+    # ---- download all files in pyw_mode, ignore patterns ----
+    download_github_folder(API_URL, folder, ignore_patterns=["server_config.json", ".gitkeep"])
+
+    # ---- ensure www folder exists ----
+    www_folder = folder / "www"
+    www_folder.mkdir(exist_ok=True)
 
     # ---- create default config if not exists ----
     config_file = folder / "server_config.json"
@@ -182,9 +195,9 @@ def main():
     except Exception:
         print("⚠️ Could not delete installer script (manual cleanup needed)")
 
-    print("\n✅ Installation complete!")
+    print("\\n✅ Installation complete!")
     print(f"👉 Run: {folder / 'start_server.pyw'} to start server (double-click works!)")
-    print(f"👉 Run: python \"{folder / 'update.py'}\" to update all pyw_mode files anytime (config preserved)")
+    print(f"👉 Run: python \"{folder / 'update.py'}\" to update all pyw_mode files anytime (ignored files preserved)")
 
 # -----------------------
 if __name__ == "__main__":
