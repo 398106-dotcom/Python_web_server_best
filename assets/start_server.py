@@ -12,9 +12,8 @@ from pathlib import Path
 import webbrowser
 import subprocess
 
-# ----------  OpenSSL auto-finder  ----------
+# ---------- OpenSSL auto-finder ----------
 def find_openssl():
-    """Return full path to openssl.exe; raise RuntimeError if not found."""
     for pf in (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)")):
         if not pf:
             continue
@@ -35,34 +34,16 @@ def find_openssl():
         return user
     raise RuntimeError("OpenSSL not found. Please install it or place openssl.exe beside this script.")
 
-
 OPENSSL_EXE = find_openssl()
-# -------------------------------------------
 
-# ----------  Secure HTTP Request Handler ----------
+# ---------- Secure HTTP Request Handler ----------
 class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    """
-    Custom HTTP handler:
-    - Serves only allowed file types
-    - Blocks dangerous extensions
-    - Auto-serves index.html / index.htm / index.web for directories
-    """
-    ALLOWED_EXTENSIONS = {
-        '.html', '.htm', '.css', '.js', '.png', '.jpg', '.jpeg',
-        '.gif', '.ico', '.svg', '.web', '.pdf', '.txt', '.md'
-    }
-    BLOCKED_EXTENSIONS = {
-        '.py', '.pyc', '.pem', '.key', '.crt', '.config', '.json',
-        '.db', '.sqlite', '.log'
-    }
+    ALLOWED_EXTENSIONS = {'.html', '.htm', '.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.web', '.pdf', '.txt', '.md'}
+    BLOCKED_EXTENSIONS = {'.py', '.pyc', '.pem', '.key', '.crt', '.config', '.json', '.db', '.sqlite', '.log'}
     INDEX_FILES = ['index.html', 'index.htm', 'index.web']
 
     def do_GET(self):
-        # Translate URL to filesystem path
         path = self.translate_path(self.path)
-        print(f"[DEBUG] Requested path: {path}")
-
-        # Handle directory requests
         if os.path.isdir(path):
             served = False
             for index_name in self.INDEX_FILES:
@@ -79,12 +60,10 @@ class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         _, ext = os.path.splitext(path)
         ext = ext.lower()
 
-        # Block dangerous extensions
         if ext in self.BLOCKED_EXTENSIONS:
             self.send_error(403, f"Access to {ext} files is forbidden")
             return
 
-        # Serve allowed extensions
         if ext in self.ALLOWED_EXTENSIONS:
             return super().do_GET()
 
@@ -93,8 +72,7 @@ class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         print(f"[ACCESS] {self.client_address[0]} - {format % args}")
 
-
-# ----------  Server Instance ----------
+# ---------- Server Instance ----------
 class ServerInstance:
     def __init__(self, name, port, www_folder, ip_mode="network", custom_ip="0.0.0.0",
                  use_https=False, cert_file=None, key_file=None):
@@ -118,8 +96,7 @@ class ServerInstance:
         ip = self.get_effective_ip()
         return f"{ip}:{self.port} ({proto})"
 
-
-# ----------  Config Manager ----------
+# ---------- Config Manager ----------
 class ConfigManager:
     def __init__(self, config_file="server_config.json"):
         app_dir = Path(__file__).parent.resolve()
@@ -136,8 +113,7 @@ class ConfigManager:
     def save_server_configs(self, servers_data):
         self.config_file.write_text(json.dumps({"servers": servers_data}, indent=4))
 
-
-# ----------  GUI ----------
+# ---------- GUI ----------
 class WebServerGUI:
     def __init__(self, root):
         self.root = root
@@ -153,12 +129,12 @@ class WebServerGUI:
             self.server_listbox.selection_set(0)
             self.select_server(first)
 
-    # ----------  GUI construction ----------
+    # ---------- GUI Construction ----------
     def build_gui(self):
         paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         paned.pack(fill=tk.BOTH, expand=True)
 
-        # left panel: server list
+        # Left panel: server list
         left = ttk.Frame(paned)
         paned.add(left, weight=1)
         ttk.Label(left, text="Servers", font=('Arial', 12, 'bold')).pack(pady=(0, 5))
@@ -177,26 +153,26 @@ class WebServerGUI:
         ttk.Button(btn_frame, text="Add Server", command=self.add_server).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text="Remove Server", command=self.remove_server).pack(side=tk.LEFT, padx=2)
 
-        # right panel: controls
+        # Right panel
         right = ttk.Frame(paned)
         paned.add(right, weight=3)
 
-        # server control
+        # Server control
         control = ttk.LabelFrame(right, text="Server Control", padding=10)
         control.pack(fill=tk.X, pady=5)
         self.build_control(control)
 
-        # certificate frame
+        # Certificate frame
         self.cert_frame = ttk.LabelFrame(right, text="SSL Certificate Settings", padding=10)
         self.build_cert(self.cert_frame)
         self.cert_frame_visible = False
 
-        # network info
+        # Network info
         net = ttk.LabelFrame(right, text="Network Information", padding=10)
         net.pack(fill=tk.X, pady=5)
         self.build_network(net)
 
-        # www folder
+        # WWW folder
         folder = ttk.LabelFrame(right, text="WWW Folder Settings", padding=10)
         folder.pack(fill=tk.X, pady=5)
         self.www_label = ttk.Label(folder, text="Folder: Not set")
@@ -204,6 +180,7 @@ class WebServerGUI:
         ttk.Button(folder, text="Select Folder", command=self.select_www_folder).grid(row=0, column=1, padx=5)
         ttk.Button(folder, text="Open Folder", command=self.open_www_folder).grid(row=0, column=2, padx=5)
 
+        # File management
         file_frame = ttk.LabelFrame(right, text="File Management", padding=10)
         file_frame.pack(fill=tk.X, pady=5)
         ttk.Button(file_frame, text="Add Files to WWW", command=self.add_files_to_www).pack(side=tk.LEFT, padx=2)
@@ -211,7 +188,7 @@ class WebServerGUI:
         self.file_listbox = tk.Listbox(file_frame, height=5)
         self.file_listbox.pack(fill=tk.X, expand=True, pady=5)
 
-        # editor + log
+        # Editor + log
         nb = ttk.Notebook(right)
         nb.pack(fill=tk.BOTH, expand=True, pady=10)
         editor = ttk.Frame(nb, padding=10)
@@ -229,7 +206,7 @@ class WebServerGUI:
         self.log_text = scrolledtext.ScrolledText(log, height=10, state='disabled')
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
-    # ---------- Control panel ----------
+    # ---------- Server Control ----------
     def build_control(self, parent):
         name_frm = ttk.Frame(parent)
         name_frm.grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=5)
@@ -264,7 +241,7 @@ class WebServerGUI:
         self.status_label = ttk.Label(parent, text="Status: Stopped", foreground="red")
         self.status_label.grid(row=4, column=3, padx=10)
 
-    # ---------- Cert panel ----------
+    # ---------- Certificate ----------
     def build_cert(self, parent):
         ttk.Label(parent, text="Certificate (.pem):").grid(row=0, column=0, sticky=tk.W)
         self.cert_var = tk.StringVar()
@@ -278,7 +255,7 @@ class WebServerGUI:
 
         ttk.Button(parent, text="Generate Self-Signed Cert", command=self.generate_self_signed_cert).grid(row=2, column=0, columnspan=3, pady=5)
 
-    # ---------- Network info ----------
+    # ---------- Network ----------
     def build_network(self, parent):
         local_ip = self.get_network_ip()
         ttk.Label(parent, text="Network IP (for other devices):", font=('Arial', 9, 'bold')).grid(row=0, column=0, sticky=tk.W)
@@ -298,11 +275,11 @@ class WebServerGUI:
         except Exception:
             return "127.0.0.1"
 
-    # ---------- Events ----------
+    # ---------- HTTPS toggle ----------
     def on_https_toggle(self):
         if self.https_var.get():
             if not self.cert_frame_visible:
-                self.cert_frame.pack(fill=tk.X, pady=5, after=self.root.nametowidget(self.toggle_btn.winfo_parent()))
+                self.cert_frame.pack(fill=tk.X, pady=5)
                 self.cert_frame_visible = True
         else:
             if self.cert_frame_visible:
@@ -313,31 +290,33 @@ class WebServerGUI:
             self.save_servers_to_config()
             self.log_message(f"HTTPS {'enabled' if self.https_var.get() else 'disabled'}")
 
+    # ---------- IP mode change ----------
     def on_ip_mode_change(self, _=None):
         mode = self.ip_mode_var.get()
-        self.custom_ip_frame.grid(row=3, column=1, columnspan=2, sticky=tk.W, padx=5, pady=5) if mode == "Custom IP" else self.custom_ip_frame.grid_remove()
+        if mode == "Custom IP":
+            self.custom_ip_frame.grid()
+        else:
+            self.custom_ip_frame.grid_remove()
         if self.current_server_name:
             s = self.servers[self.current_server_name]
             s.ip_mode = {"Network Access (All IPs)": "network", "Local Access Only (127.0.0.1)": "localhost"}.get(mode, "custom")
             self.save_servers_to_config()
             self.update_access_urls()
 
-    # ---------- Cert browse ----------
+    # ---------- Cert selection ----------
     def select_cert(self):
         f = filedialog.askopenfilename(title="Select SSL Certificate", filetypes=[("PEM files", "*.pem"), ("All files", "*.*")])
-        if f:
+        if f and self.current_server_name:
             self.cert_var.set(f)
-            if self.current_server_name:
-                self.servers[self.current_server_name].cert_file = f
-                self.save_servers_to_config()
+            self.servers[self.current_server_name].cert_file = f
+            self.save_servers_to_config()
 
     def select_key(self):
         f = filedialog.askopenfilename(title="Select Private Key", filetypes=[("Key files", "*.key"), ("All files", "*.*")])
-        if f:
+        if f and self.current_server_name:
             self.key_var.set(f)
-            if self.current_server_name:
-                self.servers[self.current_server_name].key_file = f
-                self.save_servers_to_config()
+            self.servers[self.current_server_name].key_file = f
+            self.save_servers_to_config()
 
     # ---------- Self-signed cert ----------
     def generate_self_signed_cert(self):
@@ -367,151 +346,7 @@ class WebServerGUI:
             messagebox.showerror("OpenSSL Error", e.stderr or str(e))
             self.log_message(f"Cert generation failed: {e.stderr or e}")
 
-    # ---------- WWW folder / files ----------
-    def select_www_folder(self):
-        if not self.current_server_name:
-            return
-        f = filedialog.askdirectory(title="Select WWW Folder")
-        if f:
-            self.servers[self.current_server_name].www_folder = f
-            self.save_servers_to_config()
-            self.update_www_display()
-            self.refresh_file_list()
-
-    def open_www_folder(self):
-        if not self.current_server_name:
-            return
-        www = self.servers[self.current_server_name].www_folder
-        if Path(www).is_dir():
-            webbrowser.open(www)
-        else:
-            messagebox.showerror("Error", "WWW folder does not exist")
-
-    def add_files_to_www(self):
-        if not self.current_server_name:
-            return
-        files = filedialog.askopenfilenames(title="Select Files to Add")
-        if not files:
-            return
-        www = Path(self.servers[self.current_server_name].www_folder)
-        www.mkdir(parents=True, exist_ok=True)
-        added = 0
-        for src in files:
-            dst = www / Path(src).name
-            try:
-                shutil.copy2(src, dst)
-                added += 1
-            except Exception as e:
-                self.log_message(f"Copy error: {e}")
-        self.refresh_file_list()
-        messagebox.showinfo("Success", f"Added {added} files")
-
-    def refresh_file_list(self):
-        self.file_listbox.delete(0, tk.END)
-        if not self.current_server_name:
-            return
-        www = Path(self.servers[self.current_server_name].www_folder)
-        if www.is_dir():
-            for f in sorted(www.iterdir()):
-                if f.is_file():
-                    self.file_listbox.insert(tk.END, f.name)
-
-    # ---------- Index editor ----------
-    def load_index_file(self):
-        if not self.current_server_name:
-            return
-        www = Path(self.servers[self.current_server_name].www_folder)
-        if not www.is_dir():
-            messagebox.showerror("Error", "WWW folder does not exist")
-            return
-        for name in ("index.html", "index.htm", "index.web"):
-            f = www / name
-            if f.is_file():
-                self.editor_text.delete(1.0, tk.END)
-                self.editor_text.insert(1.0, f.read_text(encoding="utf-8"))
-                self.log_message(f"Loaded {f.name}")
-                return
-        messagebox.showinfo("Info", "No index file found. Create a new one?")
-
-    def save_index_file(self):
-        if not self.current_server_name:
-            return
-        www = Path(self.servers[self.current_server_name].www_folder)
-        www.mkdir(parents=True, exist_ok=True)
-        out = www / "index.html"
-        try:
-            out.write_text(self.editor_text.get(1.0, tk.END), encoding="utf-8")
-            self.log_message(f"Saved {out.name}")
-            messagebox.showinfo("Success", f"File saved: {out.name}")
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-
-    def create_new_index(self):
-        tpl = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Welcome</title>
-  <style>body{font-family:Arial;margin:40px;background:#f4f4f4}.container{max-width:800px;margin:0 auto;background:#fff;padding:20px;border-radius:8px}h1{color:#333}</style>
-</head>
-<body>
-  <div class="container">
-    <h1>Welcome to My Web Server!</h1>
-    <p>This is a new index file.</p>
-    <p>Server is running successfully.</p>
-  </div>
-</body>
-</html>"""
-        self.editor_text.delete(1.0, tk.END)
-        self.editor_text.insert(1.0, tpl)
-        self.log_message("Created new index template")
-
-    # ---------- Server management ----------
-    def add_server(self):
-        name = simpledialog.askstring("Add Server", "Enter server name:")
-        if not name or name in self.servers:
-            messagebox.showerror("Error", "Name empty or already exists")
-            return
-        used = {s.port for s in self.servers.values()}
-        port = 8000
-        while port in used:
-            port += 1
-        www = Path(__file__).parent / f"www_{name}"
-        self.servers[name] = ServerInstance(name, port, str(www), "network")
-        self.server_listbox.insert(tk.END, name)
-        self.save_servers_to_config()
-        self.log_message(f"Added server '{name}' on port {port}")
-        self.server_listbox.selection_clear(0, tk.END)
-        self.server_listbox.selection_set(tk.END)
-        self.select_server(name)
-
-    def remove_server(self):
-        sel = self.server_listbox.curselection()
-        if not sel:
-            return
-        name = self.server_listbox.get(sel[0])
-        srv = self.servers[name]
-        if srv.is_running:
-            if not messagebox.askyesno("Confirm", f"Server '{name}' is running. Stop and remove?"):
-                return
-            self.stop_server()
-        self.server_listbox.delete(sel[0])
-        del self.servers[name]
-        self.save_servers_to_config()
-        self.log_message(f"Removed server '{name}'")
-        if self.server_listbox.size():
-            self.server_listbox.selection_set(0)
-            self.select_server(self.server_listbox.get(0))
-        else:
-            self.current_server_name = None
-            self.name_label.config(text="None")
-            self.https_var.set(False)
-            self.ip_mode_var.set("Network Access (All IPs)")
-            self.port_var.set("")
-            self.www_label.config(text="Folder: Not set")
-            self.file_listbox.delete(0, tk.END)
-            self.access_urls_label.config(text="")
-
+    # ---------- Server start/stop ----------
     def toggle_server(self):
         if not self.current_server_name:
             return
@@ -521,10 +356,7 @@ class WebServerGUI:
         else:
             self.start_server()
 
-    # ---------- Start / Stop ----------
     def start_server(self):
-        if not self.current_server_name:
-            return
         srv = self.servers[self.current_server_name]
         try:
             port = int(self.port_var.get())
@@ -536,151 +368,55 @@ class WebServerGUI:
             if srv.ip_mode == "custom":
                 srv.custom_ip = self.custom_ip_entry.get().strip()
             srv.port = port
-
             ip_bind = srv.get_effective_ip()
-            socket.inet_aton(ip_bind)  # validate
-
-            # conflict check
-            for s in self.servers.values():
-                if s != srv and s.is_running and s.port == port and s.get_effective_ip() == ip_bind:
-                    raise ValueError(f"Address in use by server '{s.name}'")
-
-            www = Path(srv.www_folder)
-            www.mkdir(parents=True, exist_ok=True)
-
             handler = SecureHTTPRequestHandler
-            srv.server = socketserver.TCPServer((ip_bind, port), lambda *a, **k: handler(*a, directory=str(www), **k))
-
-if srv.use_https:
-    if not (srv.cert_file and srv.key_file and Path(srv.cert_file).is_file() and Path(srv.key_file).is_file()):
-        raise ValueError("HTTPS enabled but cert/key files missing")
-    
-    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    # Force secure TLS only
-    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-    ctx.maximum_version = ssl.TLSVersion.TLSv1_3  # optional
-    ctx.load_cert_chain(srv.cert_file, srv.key_file)
-    srv.server.socket = ctx.wrap_socket(srv.server.socket, server_side=True)
-
-
+            os.chdir(srv.www_folder)
+            srv.server = socketserver.ThreadingTCPServer((ip_bind, port), handler)
+            if srv.use_https:
+                if not srv.cert_file or not srv.key_file:
+                    messagebox.showerror("SSL Error", "Cert or key file missing")
+                    return
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                context.load_cert_chain(certfile=srv.cert_file, keyfile=srv.key_file)
+                srv.server.socket = context.wrap_socket(srv.server.socket, server_side=True)
+            srv.is_running = True
             srv.server_thread = threading.Thread(target=srv.server.serve_forever, daemon=True)
             srv.server_thread.start()
-            srv.is_running = True
             self.update_status()
             self.update_access_urls()
-            self.save_servers_to_config()
             self.log_message(f"Server '{srv.name}' started on {srv.get_display_ip()}")
         except Exception as e:
-            messagebox.showerror("Start Error", str(e))
-            self.log_message(f"Start failed: {e}")
+            messagebox.showerror("Error", str(e))
+            self.log_message(f"Failed to start server: {e}")
 
     def stop_server(self):
-        if not self.current_server_name:
-            return
         srv = self.servers[self.current_server_name]
         if srv.server:
             srv.server.shutdown()
             srv.server.server_close()
-            srv.is_running = False
-            self.update_status()
-            self.update_access_urls()
-            self.log_message(f"Server '{srv.name}' stopped")
-
-    # ---------- Config / select ----------
-    def load_servers_from_config(self):
-        data = self.config_manager.load_server_configs()
-        app_dir = Path(__file__).parent.resolve()
-        if not data:
-            default_www = app_dir / "www"
-            self.servers["Default"] = ServerInstance("Default", 8000, str(default_www), "network")
-        else:
-            for cfg in data:
-                www = Path(cfg["www_folder"])
-                if not www.is_absolute():
-                    www = app_dir / www
-                self.servers[cfg["name"]] = ServerInstance(
-                    cfg["name"], cfg["port"], str(www),
-                    cfg.get("ip_mode", "network"), cfg.get("custom_ip", "0.0.0.0"),
-                    cfg.get("use_https", False), cfg.get("cert_file"), cfg.get("key_file")
-                )
-
-    def save_servers_to_config(self):
-        data = [
-            {
-                "name": s.name, "port": s.port, "www_folder": s.www_folder,
-                "ip_mode": s.ip_mode, "custom_ip": s.custom_ip,
-                "use_https": s.use_https, "cert_file": s.cert_file, "key_file": s.key_file
-            }
-            for s in self.servers.values()
-        ]
-        self.config_manager.save_server_configs(data)
-
-    def on_server_select(self, _):
-        sel = self.server_listbox.curselection()
-        if sel:
-            self.select_server(self.server_listbox.get(sel[0]))
-
-    def select_server(self, name):
-        self.current_server_name = name
-        srv = self.servers[name]
-        self.name_label.config(text=name)
-        self.https_var.set(srv.use_https)
-        self.on_https_toggle()
-        mode = {"network": "Network Access (All IPs)", "localhost": "Local Access Only (127.0.0.1)", "custom": "Custom IP"}.get(srv.ip_mode, "Custom IP")
-        self.ip_mode_var.set(mode)
-        self.custom_ip_entry.delete(0, tk.END)
-        self.custom_ip_entry.insert(0, srv.custom_ip)
-        self.port_var.set(str(srv.port))
-        if srv.cert_file:
-            self.cert_var.set(srv.cert_file)
-        if srv.key_file:
-            self.key_var.set(srv.key_file)
-        self.update_www_display()
-        self.refresh_file_list()
+            srv.server = None
+        srv.is_running = False
         self.update_status()
         self.update_access_urls()
-        self.log_message(f"Selected server '{name}'")
+        self.log_message(f"Server '{srv.name}' stopped")
 
-    def update_www_display(self):
-        if not self.current_server_name:
-            return
-        www = Path(self.servers[self.current_server_name].www_folder)
-        try:
-            rel = www.relative_to(Path(__file__).parent)
-        except ValueError:
-            rel = www
-        self.www_label.config(text=f"Folder: {rel}")
-
+    # ---------- Misc helpers ----------
     def update_status(self):
-        if not self.current_server_name:
-            return
         srv = self.servers[self.current_server_name]
         if srv.is_running:
+            self.status_label.config(text="Status: Running", foreground="green")
             self.toggle_btn.config(text="Stop Server")
-            self.status_label.config(text=f"Running on {srv.get_display_ip()}", foreground="green")
         else:
-            self.toggle_btn.config(text="Start Server")
             self.status_label.config(text="Status: Stopped", foreground="red")
+            self.toggle_btn.config(text="Start Server")
 
     def update_access_urls(self):
-        if not self.current_server_name:
-            self.access_urls_label.config(text="")
-            return
         srv = self.servers[self.current_server_name]
-        if not srv.is_running:
-            self.access_urls_label.config(text="")
-            return
-        proto = "https" if srv.use_https else "http"
-        ip = srv.get_effective_ip()
-        port = srv.port
-        net_ip = self.get_network_ip()
-        if ip == "0.0.0.0":
-            txt = f"Access: {proto}://localhost:{port}  |  {proto}://{net_ip}:{port} (network)"
-        elif ip == "127.0.0.1":
-            txt = f"Access: {proto}://127.0.0.1:{port} (local only)"
+        if srv.is_running:
+            urls = f"Access URLs:\n- {srv.get_display_ip()}"
         else:
-            txt = f"Access: {proto}://{ip}:{port} (custom)"
-        self.access_urls_label.config(text=txt)
+            urls = "Server not running"
+        self.access_urls_label.config(text=urls)
 
     def log_message(self, msg):
         self.log_text.config(state='normal')
@@ -688,21 +424,165 @@ if srv.use_https:
         self.log_text.see(tk.END)
         self.log_text.config(state='disabled')
 
+    # ---------- Server management ----------
+    def add_server(self):
+        name = simpledialog.askstring("Add Server", "Enter server name:")
+        if not name:
+            return
+        if name in self.servers:
+            messagebox.showerror("Error", "Server already exists")
+            return
+        www_folder = filedialog.askdirectory(title="Select WWW Folder")
+        if not www_folder:
+            return
+        srv = ServerInstance(name, port=8080, www_folder=www_folder)
+        self.servers[name] = srv
+        self.server_listbox.insert(tk.END, name)
+        self.save_servers_to_config()
+
+    def remove_server(self):
+        sel = self.server_listbox.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        name = self.server_listbox.get(idx)
+        srv = self.servers[name]
+        if srv.is_running:
+            self.stop_server()
+        del self.servers[name]
+        self.server_listbox.delete(idx)
+        self.save_servers_to_config()
+        self.current_server_name = None
+
+    def on_server_select(self, event):
+        sel = self.server_listbox.curselection()
+        if not sel:
+            return
+        name = self.server_listbox.get(sel[0])
+        self.select_server(name)
+
+    def select_server(self, name):
+        self.current_server_name = name
+        srv = self.servers[name]
+        self.name_label.config(text=name)
+        self.port_var.set(str(srv.port))
+        self.https_var.set(srv.use_https)
+        self.cert_var.set(srv.cert_file or "")
+        self.key_var.set(srv.key_file or "")
+        self.ip_mode_var.set({"network": "Network Access (All IPs)", "localhost": "Local Access Only (127.0.0.1)", "custom": "Custom IP"}.get(srv.ip_mode, "network"))
+        self.custom_ip_entry.delete(0, tk.END)
+        self.custom_ip_entry.insert(0, srv.custom_ip)
+        if srv.ip_mode == "custom":
+            self.custom_ip_frame.grid()
+        else:
+            self.custom_ip_frame.grid_remove()
+        self.www_label.config(text=f"Folder: {srv.www_folder}")
+        self.update_status()
+        self.update_access_urls()
+        self.refresh_file_list()
+
+    # ---------- WWW / files ----------
+    def select_www_folder(self):
+        if not self.current_server_name:
+            return
+        folder = filedialog.askdirectory(title="Select WWW Folder")
+        if folder:
+            self.servers[self.current_server_name].www_folder = folder
+            self.www_label.config(text=f"Folder: {folder}")
+            self.save_servers_to_config()
+            self.refresh_file_list()
+
+    def open_www_folder(self):
+        if not self.current_server_name:
+            return
+        folder = self.servers[self.current_server_name].www_folder
+        if folder and os.path.isdir(folder):
+            os.startfile(folder)
+
+    def add_files_to_www(self):
+        if not self.current_server_name:
+            return
+        files = filedialog.askopenfilenames(title="Select Files")
+        if not files:
+            return
+        folder = self.servers[self.current_server_name].www_folder
+        for f in files:
+            shutil.copy(f, folder)
+        self.refresh_file_list()
+
+    def refresh_file_list(self):
+        if not self.current_server_name:
+            return
+        self.file_listbox.delete(0, tk.END)
+        folder = self.servers[self.current_server_name].www_folder
+        if os.path.isdir(folder):
+            for f in os.listdir(folder):
+                self.file_listbox.insert(tk.END, f)
+
+    # ---------- Index editor ----------
+    def load_index_file(self):
+        if not self.current_server_name:
+            return
+        folder = self.servers[self.current_server_name].www_folder
+        for name in ['index.html', 'index.htm', 'index.web']:
+            path = os.path.join(folder, name)
+            if os.path.isfile(path):
+                self.editor_text.delete(1.0, tk.END)
+                self.editor_text.insert(tk.END, open(path, 'r', encoding='utf-8').read())
+                messagebox.showinfo("Loaded", f"Loaded {name}")
+                return
+        messagebox.showwarning("Not found", "No index file found in www folder")
+
+    def save_index_file(self):
+        if not self.current_server_name:
+            return
+        folder = self.servers[self.current_server_name].www_folder
+        path = os.path.join(folder, "index.html")
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(self.editor_text.get(1.0, tk.END))
+        messagebox.showinfo("Saved", f"Saved index.html")
+
+    def create_new_index(self):
+        self.editor_text.delete(1.0, tk.END)
+        self.editor_text.insert(tk.END, "<!DOCTYPE html>\n<html>\n<head>\n<title>New Index</title>\n</head>\n<body>\n<h1>Hello World!</h1>\n</body>\n</html>")
+        self.save_index_file()
+
+    # ---------- Config ----------
+    def load_servers_from_config(self):
+        self.servers.clear()
+        for data in self.config_manager.load_server_configs():
+            srv = ServerInstance(
+                data['name'],
+                data.get('port', 8080),
+                data.get('www_folder', os.getcwd()),
+                data.get('ip_mode', 'network'),
+                data.get('custom_ip', '0.0.0.0'),
+                data.get('use_https', False),
+                data.get('cert_file'),
+                data.get('key_file')
+            )
+            self.servers[srv.name] = srv
+
+    def save_servers_to_config(self):
+        data = []
+        for srv in self.servers.values():
+            data.append({
+                'name': srv.name,
+                'port': srv.port,
+                'www_folder': srv.www_folder,
+                'ip_mode': srv.ip_mode,
+                'custom_ip': srv.custom_ip,
+                'use_https': srv.use_https,
+                'cert_file': srv.cert_file,
+                'key_file': srv.key_file
+            })
+        self.config_manager.save_server_configs(data)
 
 # ---------- Run ----------
 def main():
     root = tk.Tk()
-    
-    # Set the window icon relative to script location
-    try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        icon_path = os.path.join(script_dir, 'www', 'favicon.png')
-        icon = tk.PhotoImage(file=icon_path)
-        root.iconphoto(False, icon)
-    except Exception as e:
-        print(f"Could not load icon: {e}")
-    
     WebServerGUI(root)
     root.mainloop()
+
 if __name__ == "__main__":
     main()
