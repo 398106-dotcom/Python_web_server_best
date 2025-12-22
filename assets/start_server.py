@@ -551,12 +551,17 @@ class WebServerGUI:
             handler = SecureHTTPRequestHandler
             srv.server = socketserver.TCPServer((ip_bind, port), lambda *a, **k: handler(*a, directory=str(www), **k))
 
-            if srv.use_https:
-                if not (srv.cert_file and srv.key_file and Path(srv.cert_file).is_file() and Path(srv.key_file).is_file()):
-                    raise ValueError("HTTPS enabled but cert/key files missing")
-                ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                ctx.load_cert_chain(srv.cert_file, srv.key_file)
-                srv.server.socket = ctx.wrap_socket(srv.server.socket, server_side=True)
+if srv.use_https:
+    if not (srv.cert_file and srv.key_file and Path(srv.cert_file).is_file() and Path(srv.key_file).is_file()):
+        raise ValueError("HTTPS enabled but cert/key files missing")
+    
+    ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    # Force secure TLS only
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    ctx.maximum_version = ssl.TLSVersion.TLSv1_3  # optional
+    ctx.load_cert_chain(srv.cert_file, srv.key_file)
+    srv.server.socket = ctx.wrap_socket(srv.server.socket, server_side=True)
+
 
             srv.server_thread = threading.Thread(target=srv.server.serve_forever, daemon=True)
             srv.server_thread.start()
